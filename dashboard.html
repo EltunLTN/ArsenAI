@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BakıFlow - Ağıllı Trafik Sistemi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0e1a;
+            color: #e5e7eb;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.5) 100%);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            height: 70px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #3b82f6 0%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #9ca3af;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.5);
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #10b981;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .clock {
+            font-size: 14px;
+            font-weight: 600;
+            color: #3b82f6;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        /* Main Container */
+        .container {
+            display: flex;
+            height: calc(100vh - 70px);
+            gap: 16px;
+            padding: 16px;
+        }
+
+        /* Left Panel */
+        .left-panel {
+            width: 35%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .left-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .left-panel::-webkit-scrollbar-track {
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 10px;
+        }
+
+        .left-panel::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.4);
+            border-radius: 10px;
+        }
+
+        .intersection-card {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(27, 38, 54, 0.6) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .intersection-card:hover {
+            border-color: rgba(59, 130, 246, 0.6);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .intersection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .intersection-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e5e7eb;
+        }
+
+        .mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+        }
+
+        .toggle-switch {
+            width: 32px;
+            height: 16px;
+            background: rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch.active {
+            background: #10b981;
+            border-color: #10b981;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch.active .toggle-slider {
+            left: 18px;
+        }
+
+        .intersection-directions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .direction-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .direction-arrow {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 20px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .direction-arrow.active {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: #10b981;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4), inset 0 0 12px rgba(16, 185, 129, 0.2);
+            animation: glow-pulse 2s infinite;
+        }
+
+        @keyframes glow-pulse {
+            0%, 100% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.4), inset 0 0 12px rgba(16, 185, 129, 0.2); }
+            50% { box-shadow: 0 0 24px rgba(16, 185, 129, 0.6), inset 0 0 16px rgba(16, 185, 129, 0.3); }
+        }
+
+        .car-count {
+            font-size: 12px;
+            font-weight: 700;
+            color: #3b82f6;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .car-count.animate {
+            animation: count-bounce 0.6s ease;
+        }
+
+        @keyframes count-bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        /* Right Panel */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow: hidden;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            height: 100px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(27, 38, 54, 0.6) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: rgba(59, 130, 246, 0.6);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.1);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #9ca3af;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+
+        .stat-value.green { color: #10b981; }
+        .stat-value.amber { color: #f59e0b; }
+        .stat-value.red { color: #ef4444; }
+
+        /* Chart Section */
+        .chart-container {
+            flex: 1;
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(27, 38, 54, 0.6) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e5e7eb;
+            margin-bottom: 12px;
+        }
+
+        #comparisonChart {
+            flex: 1;
+        }
+
+        /* Bottom Controls */
+        .bottom-row {
+            display: grid;
+            grid-template-columns: 200px 1fr 220px;
+            gap: 12px;
+            height: 100px;
+        }
+
+        .emergency-section {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(27, 38, 54, 0.6) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .emergency-btn {
+            width: 100%;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            border-radius: 8px;
+            color: white;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: emergency-pulse 2s infinite;
+        }
+
+        @keyframes emergency-pulse {
+            0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 24px rgba(239, 68, 68, 0.8); }
+        }
+
+        .emergency-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 28px rgba(239, 68, 68, 1) !important;
+        }
+
+        .emergency-btn.active {
+            animation: emergency-flash 0.5s ease;
+        }
+
+        @keyframes emergency-flash {
+            0%, 100% { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+            50% { background: linear-gradient(135deg, #fca5a5 0%, #ef4444 100%); }
+        }
+
+        .control-section {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(27, 38, 54, 0.6) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .time-display {
+            font-size: 24px;
+            font-weight: 700;
+            color: #3b82f6;
+            font-family: 'Monaco', 'Courier New', monospace;
+            text-align: center;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+        }
+
+        .speed-slider {
+            flex: 1;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(59, 130, 246, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .speed-slider::-webkit-slider-thumb:hover {
+            background: #60a5fa;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+        }
+
+        .speed-slider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .speed-slider::-moz-range-thumb:hover {
+            background: #60a5fa;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+        }
+
+        .speed-value {
+            min-width: 20px;
+            text-align: right;
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .peak-badge {
+            font-size: 9px;
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.5);
+            color: #f59e0b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .map-section {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(27, 38, 54, 0.7) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .map-title {
+            font-size: 10px;
+            font-weight: 600;
+            color: #9ca3af;
+            margin-bottom: 8px;
+            width: 100%;
+            text-align: center;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .intersection-dot {
+            r: 6;
+            fill: #3b82f6;
+            filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
+        }
+
+        .intersection-dot.active {
+            fill: #10b981;
+            filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8));
+            animation: dot-pulse 1s infinite;
+        }
+
+        @keyframes dot-pulse {
+            0%, 100% { r: 6; filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8)); }
+            50% { r: 8; filter: drop-shadow(0 0 12px rgba(16, 185, 129, 1)); }
+        }
+
+        .road-line {
+            stroke: rgba(59, 130, 246, 0.3);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 4, 4;
+        }
+
+        .car-dot {
+            r: 3;
+            fill: #ef4444;
+            filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.6));
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(27, 38, 54, 0.8) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #10b981;
+            animation: slide-in 0.3s ease;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes slide-in {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.error {
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .toast.warning {
+            color: #f59e0b;
+            border-color: rgba(245, 158, 11, 0.4);
+        }
+
+        /* Emergency Red Flash */
+        .emergency-flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(239, 68, 68, 0.2);
+            animation: flash 0.1s ease;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <div class="navbar">
+        <div class="navbar-left">
+            <div class="logo">BakıFlow</div>
+            <div class="subtitle">Bakı Ağıllı Trafik Sistemi</div>
+        </div>
+        <div class="navbar-right">
+            <div class="live-badge">
+                <div class="live-dot"></div>
+                <span>Canlı</span>
+            </div>
+            <div class="clock" id="clock">08:00:00</div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Left Panel -->
+        <div class="left-panel">
+            <div id="intersections-container"></div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <!-- Stats Row -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">🚗 Ümumi gözləyən</div>
+                    <div class="stat-value" id="totalWaiting">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">⚡ Azaldılan gözləmə</div>
+                    <div class="stat-value amber" id="reduction">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">✅ Keçən maşınlar</div>
+                    <div class="stat-value green" id="carsPassed">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">🚨 Xüsusi hadisələr</div>
+                    <div class="stat-value red" id="emergencies">0</div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="chart-container">
+                <div class="chart-title">Gözləmə Müqayisəsi: AI vs Sabit Sistem</div>
+                <canvas id="comparisonChart"></canvas>
+            </div>
+
+            <!-- Bottom Row -->
+            <div class="bottom-row">
+                <!-- Emergency Section -->
+                <div class="emergency-section">
+                    <button class="emergency-btn" id="emergencyBtn" onclick="triggerEmergency()">
+                        🚨 Ambulans Simulyasiyası
+                    </button>
+                </div>
+
+                <!-- Control Section -->
+                <div class="control-section">
+                    <div class="time-display" id="simTime">08:00</div>
+                    <div class="speed-control">
+                        <span>x</span>
+                        <input type="range" class="speed-slider" id="speedSlider" min="1" max="10" value="1" onchange="updateSpeed(this.value)">
+                        <span class="speed-value" id="speedValue">1x</span>
+                    </div>
+                    <div class="peak-badge" id="peakBadge" style="display: none;">⏰ Peak Saat</div>
+                </div>
+
+                <!-- Map Section -->
+                <div class="map-section">
+                    <div class="map-title">🗺️ Bakı Trafik Xəritəsi</div>
+                    <svg id="mapSvg" viewBox="0 0 200 200">
+                        <line class="road-line" x1="100" y1="30" x2="100" y2="170"/>
+                        <line class="road-line" x1="30" y1="100" x2="170" y2="100"/>
+                        <circle class="intersection-dot" id="dot-0" cx="60" cy="60"/>
+                        <circle class="intersection-dot" id="dot-1" cx="140" cy="60"/>
+                        <circle class="intersection-dot" id="dot-2" cx="60" cy="140"/>
+                        <circle class="intersection-dot" id="dot-3" cx="140" cy="140"/>
+                        <g id="cars-container"></g>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== STATE MANAGEMENT ====================
+        const state = {
+            simTime: 8 * 3600, // 08:00 in seconds
+            speedMultiplier: 1,
+            emergencyActive: false,
+            emergencyEndTime: null,
+            intersections: [],
+            chartData: {
+                timestamps: [],
+                aiWaiting: [],
+                fixedWaiting: [],
+                maxDataPoints: 30
+            },
+            stats: {
+                totalCarsPassed: 0,
+                emergencyCount: 0,
+                aiTotalWaiting: 0,
+                fixedTotalWaiting: 0
+            }
+        };
+
+        const intersectionNames = [
+            "Neftçilər · 28 May",
+            "Nizami · İstiqlaliyyət",
+            "H.Əliyev · Tbilisi",
+            "R.Behbudov · Füzuli"
+        ];
+
+        // ==================== INITIALIZATION ====================
+        function initIntersections() {
+            state.intersections = intersectionNames.map((name, idx) => ({
+                id: idx,
+                name: name,
+                mode: 'AI', // 'AI' or 'Fixed'
+                directions: {
+                    'N': { cars: getRandom(5, 15), green: true },
+                    'S': { cars: getRandom(3, 12), green: false },
+                    'E': { cars: getRandom(4, 14), green: false },
+                    'W': { cars: getRandom(2, 10), green: false }
+                },
+                greenCycle: 0,
+                greenDuration: 30,
+                lastUpdate: 0
+            }));
+
+            state.intersections.forEach(intersection => {
+                // Set initial active direction
+                const maxDir = getMaxWaitingDirection(intersection);
+                Object.keys(intersection.directions).forEach(dir => {
+                    intersection.directions[dir].green = (dir === maxDir);
+                });
+            });
+
+            renderIntersections();
+        }
+
+        function getRandom(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function isPeakHour(seconds) {
+            const hours = Math.floor(seconds / 3600) % 24;
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const timeInMinutes = hours * 60 + minutes;
+
+            return (timeInMinutes >= 480 && timeInMinutes <= 570) || // 08:00-09:30
+                   (timeInMinutes >= 1050 && timeInMinutes <= 1140); // 17:30-19:00
+        }
+
+        function getCarRange() {
+            return isPeakHour(state.simTime) ? [15, 45] : [2, 12];
+        }
+
+        function getMaxWaitingDirection(intersection) {
+            let maxDir = 'N';
+            let maxCars = intersection.directions['N'].cars;
+            ['S', 'E', 'W'].forEach(dir => {
+                if (intersection.directions[dir].cars > maxCars) {
+                    maxCars = intersection.directions[dir].cars;
+                    maxDir = dir;
+                }
+            });
+            return maxDir;
+        }
+
+        // ==================== SIMULATION LOGIC ====================
+        function updateSimulation() {
+            const deltaTime = 0.016 * state.speedMultiplier; // ~60fps
+
+            state.simTime += deltaTime;
+            if (state.simTime >= 86400) state.simTime = 0; // Reset to midnight
+
+            // Update peak hour badge
+            const peakBadge = document.getElementById('peakBadge');
+            if (isPeakHour(state.simTime)) {
+                peakBadge.style.display = 'block';
+            } else {
+                peakBadge.style.display = 'none';
+            }
+
+            // Update each intersection
+            state.intersections.forEach(intersection => {
+                updateIntersection(intersection);
+            });
+
+            // Update chart every 1 real second
+            if (Math.floor(state.simTime) % 1 === 0 && state.simTime - state.chartData.timestamps[state.chartData.timestamps.length - 1] >= 1) {
+                updateChart();
+            }
+
+            // Update display
+            updateDisplay();
+        }
+
+        function updateIntersection(intersection) {
+            // Update car counts (every second)
+            if (Math.floor(state.simTime) % 2 === 0 && state.simTime - intersection.lastUpdate >= 2) {
+                const [min, max] = getCarRange();
+                Object.keys(intersection.directions).forEach(dir => {
+                    intersection.directions[dir].cars = Math.max(0, getRandom(min, max));
+                });
+                intersection.lastUpdate = state.simTime;
+            }
+
+            // Handle emergency
+            if (state.emergencyActive) {
+                if (state.simTime >= state.emergencyEndTime) {
+                    state.emergencyActive = false;
+                    // Return to normal mode
+                    intersection.greenCycle = 0;
+                    intersection.greenDuration = intersection.mode === 'AI' ? 40 : 30;
+                } else {
+                    // Emergency: all red for first 3 seconds, then one direction green
+                    const emergencyElapsed = state.simTime - (state.emergencyEndTime - 23);
+                    if (emergencyElapsed < 3) {
+                        // All red
+                        Object.keys(intersection.directions).forEach(dir => {
+                            intersection.directions[dir].green = false;
+                        });
+                    } else {
+                        // First direction that becomes green stays green for 20 seconds
+                        if (emergencyElapsed < 23) {
+                            intersection.directions['N'].green = true;
+                        } else {
+                            intersection.directions['N'].green = false;
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Traffic light control
+            intersection.greenCycle += state.speedMultiplier * 0.016;
+
+            if (intersection.mode === 'AI') {
+                // AI mode: dynamic green light based on queue
+                if (intersection.greenCycle >= intersection.greenDuration) {
+                    const maxDir = getMaxWaitingDirection(intersection);
+                    Object.keys(intersection.directions).forEach(dir => {
+                        intersection.directions[dir].green = (dir === maxDir);
+                    });
+                    
+                    // Duration proportional to cars
+                    const carCount = intersection.directions[maxDir].cars;
+                    intersection.greenDuration = Math.min(60, Math.max(10, Math.ceil(carCount / 2)));
+                    intersection.greenCycle = 0;
+                }
+            } else {
+                // Fixed mode: cycles every 30 seconds
+                const directions = ['N', 'S', 'E', 'W'];
+                const currentPhase = Math.floor(intersection.greenCycle / 30) % 4;
+                
+                if (intersection.greenCycle >= 120) {
+                    intersection.greenCycle = 0;
+                }
+                
+                directions.forEach((dir, idx) => {
+                    intersection.directions[dir].green = (idx === currentPhase);
+                });
+            }
+
+            // Process cars passing through green light
+            Object.keys(intersection.directions).forEach(dir => {
+                if (intersection.directions[dir].green) {
+                    const carsPassing = getRandom(3, 8);
+                    const actualPassing = Math.min(carsPassing, intersection.directions[dir].cars);
+                    intersection.directions[dir].cars -= actualPassing;
+                    state.stats.totalCarsPassed += actualPassing;
+                }
+            });
+        }
+
+        function updateChart() {
+            const timestamp = state.chartData.timestamps.length;
+            state.chartData.timestamps.push(timestamp);
+
+            // Calculate totals for each mode
+            let aiTotal = 0, fixedTotal = 0;
+
+            state.intersections.forEach(intersection => {
+                const totalCars = Object.values(intersection.directions).reduce((sum, dir) => sum + dir.cars, 0);
+                if (intersection.mode === 'AI') {
+                    aiTotal += totalCars;
+                } else {
+                    fixedTotal += totalCars;
+                }
+            });
+
+            state.chartData.aiWaiting.push(aiTotal);
+            state.chartData.fixedWaiting.push(fixedTotal);
+
+            state.stats.aiTotalWaiting = aiTotal;
+            state.stats.fixedTotalWaiting = fixedTotal;
+
+            // Keep only last N points
+            if (state.chartData.timestamps.length > state.chartData.maxDataPoints) {
+                state.chartData.timestamps.shift();
+                state.chartData.aiWaiting.shift();
+                state.chartData.fixedWaiting.shift();
+            }
+
+            updateChartDisplay();
+        }
+
+        // ==================== RENDERING ====================
+        function renderIntersections() {
+            const container = document.getElementById('intersections-container');
+            container.innerHTML = state.intersections.map(intersection => `
+                <div class="intersection-card">
+                    <div class="intersection-header">
+                        <div class="intersection-name">${intersection.name}</div>
+                        <div class="mode-toggle">
+                            <span>${intersection.mode}</span>
+                            <div class="toggle-switch ${intersection.mode === 'AI' ? 'active' : ''}" onclick="toggleMode(${intersection.id})">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="intersection-directions">
+                        <div class="direction-row">
+                            <div class="direction-arrow ${intersection.directions['N'].green ? 'active' : ''}">⬆️</div>
+                            <div class="car-count" id="cars-${intersection.id}-N">${intersection.directions['N'].cars}</div>
+                        </div>
+                        <div class="direction-row">
+                            <div style="display: flex; gap: 20px; width: 100%; justify-content: space-between;">
+                                <div style="display: flex; gap: 8px;">
+                                    <div class="direction-arrow ${intersection.directions['W'].green ? 'active' : ''}">⬅️</div>
+                                    <div class="car-count" id="cars-${intersection.id}-W">${intersection.directions['W'].cars}</div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <div class="car-count" id="cars-${intersection.id}-E">${intersection.directions['E'].cars}</div>
+                                    <div class="direction-arrow ${intersection.directions['E'].green ? 'active' : ''}">➡️</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="direction-row">
+                            <div class="direction-arrow ${intersection.directions['S'].green ? 'active' : ''}">⬇️</div>
+                            <div class="car-count" id="cars-${intersection.id}-S">${intersection.directions['S'].cars}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateDisplay() {
+            // Update car counts with animation
+            state.intersections.forEach(intersection => {
+                ['N', 'S', 'E', 'W'].forEach(dir => {
+                    const el = document.getElementById(`cars-${intersection.id}-${dir}`);
+                    const newValue = intersection.directions[dir].cars;
+                    if (el && parseInt(el.textContent) !== newValue) {
+                        el.textContent = newValue;
+                        el.classList.remove('animate');
+                        void el.offsetWidth; // Trigger reflow
+                        el.classList.add('animate');
+                    }
+                });
+
+                // Update arrow active state
+                ['N', 'S', 'E', 'W'].forEach(dir => {
+                    const arrows = document.querySelectorAll(`.intersection-card:nth-child(${intersection.id + 1}) .direction-arrow`);
+                    const dirIndex = ['N', 'W', 'E', 'S'].indexOf(dir);
+                    if (arrows[dirIndex]) {
+                        if (intersection.directions[dir].green) {
+                            arrows[dirIndex].classList.add('active');
+                        } else {
+                            arrows[dirIndex].classList.remove('active');
+                        }
+                    }
+                });
+            });
+
+            // Update stats
+            const totalWaiting = state.intersections.reduce((sum, i) => 
+                sum + Object.values(i.directions).reduce((s, d) => s + d.cars, 0), 0
+            );
+            document.getElementById('totalWaiting').textContent = totalWaiting;
+            document.getElementById('carsPassed').textContent = state.stats.totalCarsPassed;
+            document.getElementById('emergencies').textContent = state.stats.emergencyCount;
+
+            // Calculate reduction percentage
+            const reduction = state.stats.fixedTotalWaiting > 0 
+                ? Math.round(((state.stats.fixedTotalWaiting - state.stats.aiTotalWaiting) / state.stats.fixedTotalWaiting) * 100)
+                : 0;
+            document.getElementById('reduction').textContent = Math.max(0, reduction) + '%';
+
+            // Update time display
+            const hours = Math.floor(state.simTime / 3600) % 24;
+            const minutes = Math.floor((state.simTime % 3600) / 60);
+            const seconds = Math.floor(state.simTime % 60);
+            document.getElementById('simTime').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            document.getElementById('clock').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            // Update map dots
+            state.intersections.forEach((intersection, idx) => {
+                const dot = document.getElementById(`dot-${idx}`);
+                const hasGreen = Object.values(intersection.directions).some(d => d.green);
+                if (hasGreen) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+        }
+
+        // Chart initialization
+        let comparisonChart = null;
+
+        function initChart() {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            comparisonChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: state.chartData.timestamps,
+                    datasets: [
+                        {
+                            label: 'AI Sistemi',
+                            data: state.chartData.aiWaiting,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#0a0e1a',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: 'Sabit Sistem',
+                            data: state.chartData.fixedWaiting,
+                            borderColor: '#9ca3af',
+                            borderDash: [5, 5],
+                            backgroundColor: 'rgba(156, 163, 175, 0.05)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#9ca3af',
+                            pointBorderColor: '#0a0e1a',
+                            pointBorderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#9ca3af',
+                                font: { size: 12, weight: '600' },
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                            borderColor: 'rgba(59, 130, 246, 0.5)',
+                            borderWidth: 1,
+                            titleColor: '#e5e7eb',
+                            bodyColor: '#9ca3af',
+                            padding: 12,
+                            cornerRadius: 8
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#9ca3af',
+                                font: { size: 11 }
+                            },
+                            grid: {
+                                color: 'rgba(59, 130, 246, 0.1)',
+                                drawBorder: false
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#9ca3af',
+                                font: { size: 11 }
+                            },
+                            grid: {
+                                color: 'rgba(59, 130, 246, 0.1)',
+                                drawBorder: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChartDisplay() {
+            if (comparisonChart) {
+                comparisonChart.data.labels = state.chartData.timestamps;
+                comparisonChart.data.datasets[0].data = state.chartData.aiWaiting;
+                comparisonChart.data.datasets[1].data = state.chartData.fixedWaiting;
+                comparisonChart.update();
+            }
+        }
+
+        // ==================== INTERACTIONS ====================
+        function toggleMode(intersectionId) {
+            const intersection = state.intersections[intersectionId];
+            intersection.mode = intersection.mode === 'AI' ? 'Fixed' : 'AI';
+            showToast(`${intersection.name} - Rejim: ${intersection.mode === 'AI' ? 'AI Rejimi' : 'Sabit Sistem'}`);
+            renderIntersections();
+        }
+
+        function triggerEmergency() {
+            if (state.emergencyActive) return;
+
+            state.emergencyActive = true;
+            state.emergencyEndTime = state.simTime + 23; // 3 sec red + 20 sec green
+            state.stats.emergencyCount++;
+
+            const btn = document.getElementById('emergencyBtn');
+            btn.classList.add('active');
+
+            // Create flash overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'emergency-flash-overlay';
+            document.body.appendChild(overlay);
+            setTimeout(() => overlay.remove(), 200);
+
+            setTimeout(() => {
+                btn.classList.remove('active');
+                showToast('Yol açıldı! Ambulans keçdi ✓', 'success');
+            }, 5000);
+        }
+
+        function updateSpeed(value) {
+            state.speedMultiplier = parseInt(value);
+            document.getElementById('speedValue').textContent = value + 'x';
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.querySelector('.toast-container') || createToastContainer();
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slide-in 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function createToastContainer() {
+            const container = document.createElement('div');
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+            return container;
+        }
+
+        // ==================== ANIMATION LOOP ====================
+        function animate() {
+            updateSimulation();
+            requestAnimationFrame(animate);
+        }
+
+        // ==================== STARTUP ====================
+        initIntersections();
+        initChart();
+        updateChart();
+        animate();
+    </script>
+</body>
+</html>

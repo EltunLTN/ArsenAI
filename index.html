@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BakıFlow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #f1f5f9; overflow: hidden; }
+
+        /* ─── NAVBAR ─── */
+        .navbar {
+            height: 48px;
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 16px;
+        }
+        .navbar-logo { font-size: 17px; font-weight: 700; color: #0f172a; }
+        .navbar-sep { width: 1px; height: 20px; background: #e2e8f0; }
+        .navbar-title { font-size: 13px; color: #94a3b8; }
+        .navbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .live-dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; animation: pulse 2s infinite; }
+        .navbar-text { font-size: 13px; color: #0f172a; }
+        .navbar-clock { font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #2563eb; min-width: 50px; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* ─── MAIN GRID ─── */
+        .main {
+            height: calc(100vh - 48px);
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            overflow: hidden;
+        }
+
+        /* ─── SIDEBAR ─── */
+        .sidebar {
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .section-title {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin: 0 0 8px 0;
+        }
+
+        .int-cards { display: flex; flex-direction: column; gap: 6px; }
+
+        .int-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .int-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .int-name { font-size: 13px; font-weight: 600; color: #0f172a; }
+
+        .ai-badge {
+            background: #eff6ff;
+            color: #2563eb;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 500;
+        }
+
+        .cross-grid {
+            display: grid;
+            grid-template-columns: 60px 60px 60px;
+            grid-template-rows: 44px 44px 44px;
+            gap: 0;
+            width: fit-content;
+            margin: 0 auto;
+        }
+
+        .cross-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .arrow-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: default;
+            transition: all 150ms ease;
+            background: #f1f5f9;
+            color: #94a3b8;
+        }
+
+        .arrow-btn.green {
+            background: #16a34a;
+            color: white;
+            box-shadow: 0 0 10px rgba(22, 163, 74, 0.5);
+        }
+
+        .car-count { font-size: 12px; font-weight: 600; color: #64748b; }
+        .car-count.green { color: #16a34a; }
+
+        .center-dot { width: 8px; height: 8px; background: #cbd5e1; border-radius: 50%; }
+
+        .timer-label { font-size: 11px; color: #64748b; margin-top: 6px; }
+        .timer-bar {
+            width: 100%;
+            height: 3px;
+            background: #e2e8f0;
+            border-radius: 99px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        .timer-fill { height: 100%; background: #16a34a; transition: width 0.5s linear; width: 100%; }
+
+        /* ─── CAMERA GRID ─── */
+        .cam-section { margin-top: 16px; }
+        .cam-grid { display: flex; flex-direction: column; gap: 6px; }
+        .cam-card {
+            height: 80px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            position: relative;
+            cursor: pointer;
+            background: #f1f5f9;
+        }
+        .cam-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .cam-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            padding: 4px 6px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: white;
+        }
+        .cam-name { flex: 1; }
+        .cam-count { color: #86efac; }
+        .cam-rec {
+            position: absolute;
+            top: 4px;
+            right: 5px;
+            font-size: 8px;
+            color: #dc2626;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        .rec-dot { width: 5px; height: 5px; background: #dc2626; border-radius: 50%; animation: pulse-rec 1s infinite; }
+        @keyframes pulse-rec { 0%, 49%, 100% { opacity: 1; } 50%, 99% { opacity: 0.4; } }
+        .cam-scan {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255,255,255,0.3);
+            animation: scan 2.5s linear infinite;
+        }
+        @keyframes scan { from { top: 0; } to { top: 100%; } }
+
+        /* ─── RIGHT PANEL ─── */
+        .panel {
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ─── STATS ROW ─── */
+        .stats {
+            display: flex;
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+        .stat {
+            flex: 1;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+        .stat-value { font-size: 24px; font-weight: 700; }
+
+        /* ─── TWO COLUMN ROW ─── */
+        .two-col {
+            display: flex;
+            gap: 12px;
+            flex: 0 0 200px;
+        }
+        .col-left { flex: 1; }
+        .col-right { flex: 1; }
+
+        .card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-title {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        #chart-wrapper {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            height: 160px;
+            width: 100%;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+            font-size: 10px;
+        }
+
+        #chart-wrapper {
+            flex: 1;
+            height: 160px;
+            position: relative;
+            width: 100%;
+        }
+
+        #trafficChart {
+            display: block;
+            height: 160px !important;
+            width: 100% !important;
+        }
+
+        /* ─── SIMULATION CARD ─── */
+        .sim-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .sim-info { font-size: 11px; color: #94a3b8; }
+
+        #sim-canvas {
+            display: block;
+            width: 100%;
+            height: 320px;
+            background: #f8fafc;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* ─── SCROLLBAR ─── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <!-- NAVBAR -->
+    <div class="navbar">
+        <span class="navbar-logo">BakıFlow</span>
+        <div class="navbar-sep"></div>
+        <span class="navbar-title">Bakı Trafik İdarəetməsi</span>
+        <div class="navbar-right">
+            <div class="live-dot"></div>
+            <span class="navbar-text">Canlı</span>
+            <div class="navbar-clock" id="clock">08:00:00</div>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="section-title">Kəsişmələr</div>
+            <div class="int-cards" id="int-container"></div>
+
+            <div class="cam-section">
+                <div class="section-title">Kamera Görüntüləri</div>
+                <div class="cam-grid" id="cam-container"></div>
+            </div>
+        </div>
+
+        <!-- PANEL -->
+        <div class="panel">
+            <!-- STATS -->
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-label">Ümumi Gözləyən</div>
+                    <div class="stat-value" id="stat-waiting">0</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Azaldılan Gözləmə</div>
+                    <div class="stat-value" id="stat-reduction" style="color: #d97706;">0%</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Keçən Maşınlar</div>
+                    <div class="stat-value" id="stat-passed" style="color: #16a34a;">0</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">AI Analizi</div>
+                    <div class="stat-value" id="stat-analysis" style="color: #2563eb;">--</div>
+                </div>
+            </div>
+
+            <!-- TWO COLUMNS -->
+            <div class="two-col">
+                <!-- CHART -->
+                <div class="col-left">
+                    <div class="card">
+                        <div class="card-title">AI vs Sabit Müqayisəsi</div>
+                        <div id="chart-wrapper">
+                            <div class="chart-legend">
+                                <span style="color: #2563eb;">— AI Sistemi</span>
+                                <span style="color: #94a3b8;">--- Sabit Sistem</span>
+                            </div>
+                            <canvas id="trafficChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+
+            </div>
+
+            <!-- SIMULATION -->
+            <div class="card" style="flex: 1; min-height: 280px;">
+                <div class="sim-header">
+                    <div class="card-title" style="margin: 0;">Kəsişmə Simulyasiyası</div>
+                    <div class="sim-info" id="sim-info">Neftçilər · 28 May</div>
+                </div>
+                <canvas id="sim-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * BakıFlow - Bakı Ağıllı Trafik İdarəetmə Sistemi
+         * Version: 3.0.0 Complete Rewrite
+         * Architecture: Single-file, light theme, production-ready
+         */
+
+        // Canvas roundRect polyfill
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                if (w < 2*r) r = w/2;
+                if (h < 2*r) r = h/2;
+                this.beginPath();
+                this.moveTo(x+r, y);
+                this.arcTo(x+w, y, x+w, y+h, r);
+                this.arcTo(x+w, y+h, x, y+h, r);
+                this.arcTo(x, y+h, x, y, r);
+                this.arcTo(x, y, x+w, y, r);
+                this.closePath();
+                return this;
+            };
+        }
+
+        // ─── CONSTANTS ────────────────────────────────────────
+        const CONFIG = {
+            MIN_GREEN: 10,
+            MAX_GREEN: 50,
+            SPAWN_INTERVAL: 1.5,
+            INTERSECTIONS: [
+                'Neftçilər · 28 May',
+                'Nizami · İstiqlaliyyət',
+                'H.Əliyev · Tbilisi',
+                'R.Behbudov · Füzuli'
+            ],
+            CAMERAS: [
+                'images/cam1.jpg',
+                'images/cam2.jpg',
+                'images/cam3.jpg',
+                'images/cam4.jpg'
+            ],
+            CAR_COLORS: ['#3b82f6','#8b5cf6','#f59e0b','#ef4444','#10b981','#0ea5e9']
+        };
+
+        // ─── STATE ────────────────────────────────────────────
+        const state = {
+            intersections: [],
+            simHour: 8.0,
+            simSpeed: 1,
+            running: true,
+            tickCount: 0,
+            carsPassed: 0,
+            aiTotal: 0,
+            fixedTotal: 0,
+            aiHistory: [0],
+            fixedHistory: [0],
+            labelHistory: ['0s'],
+            simulationCars: [],
+            lastSpawn: 0,
+            lastGreenDir: null,
+            phase: 'A_GREEN',
+            phaseTimer: 30,
+            roadA_queue: 10,
+            roadB_queue: 0,
+            roadAPassedCount: 0,
+            roadBPassedCount: 0,
+            lastCarSpawnA: 0,
+            lastCarSpawnB: 0,
+            phaseTick: 0
+        };
+
+        let trafficChart = null;
+
+        // Reduction tracking (cumulative)
+        let aiCumSum = 0;
+        let fixedCumSum = 0;
+        let reductionTick = 0;
+
+        // ─── SIMULATION ENGINE ────────────────────────────────
+        /**
+         * Create intersection with initial state
+         */
+        function createIntersection(name, id) {
+            return {
+                id,
+                name,
+                mode: 'AI',
+                queues: {
+                    north: Math.floor(Math.random() * 10) + 5,
+                    south: Math.floor(Math.random() * 10) + 5,
+                    east: Math.floor(Math.random() * 10) + 5,
+                    west: Math.floor(Math.random() * 10) + 5
+                },
+                greenDir: 'north',
+                greenStart: 0,
+                greenTimer: 30
+            };
+        }
+
+        /**
+         * Update queue sizes organically
+         */
+        function updateQueues(ix) {
+            Object.keys(ix.queues).forEach(dir => {
+                const change = Math.floor(Math.random() * 7) - 3;
+                ix.queues[dir] = Math.max(0, Math.min(60, ix.queues[dir] + change));
+            });
+        }
+
+        /**
+         * Find direction with max queue
+         */
+        function getMaxQueueDir(ix) {
+            let maxDir = 'north';
+            let maxCars = ix.queues.north;
+            ['south', 'east', 'west'].forEach(dir => {
+                if (ix.queues[dir] > maxCars) {
+                    maxCars = ix.queues[dir];
+                    maxDir = dir;
+                }
+            });
+            return maxDir;
+        }
+
+        /**
+         * Tick intersection simulation
+         */
+        function tickIntersection(ix) {
+            updateQueues(ix);
+
+            const elapsed = state.simHour - ix.greenStart;
+            if (elapsed >= ix.greenTimer) {
+                const nextDir = getMaxQueueDir(ix);
+                ix.greenDir = nextDir;
+                ix.greenTimer = Math.max(CONFIG.MIN_GREEN, Math.min(CONFIG.MAX_GREEN, Math.ceil(ix.queues[nextDir] * 1.2)));
+                ix.greenStart = state.simHour;
+            }
+
+            // Process cars
+            const carsPassing = Math.floor(Math.random() * 5) + 4;
+            const actualPassing = Math.min(carsPassing, ix.queues[ix.greenDir]);
+            ix.queues[ix.greenDir] -= actualPassing;
+            state.carsPassed += actualPassing;
+
+            // Accumulate for reduction %
+            Object.values(ix.queues).forEach(q => {
+                state.aiTotal += q * 0.016;
+            });
+        }
+
+        // ─── CANVAS RENDERER ──────────────────────────────────
+        /**
+         * Draw cross intersection with perpendicular roads
+         */
+        function drawSimulation(canvas) {
+            try {
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                
+                // Use explicit canvas dimensions
+                const W = canvas.width || 700;
+                const H = canvas.height || 320;
+                
+                // Ensure canvas has dimensions
+                if (W <= 0 || H <= 0) return;
+
+                // Background
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(0, 0, W, H);
+
+                // Horizontal Road (A): y from H*0.42 to H*0.58
+                const hRoadTop = H * 0.42, hRoadBot = H * 0.58, hRoadCent = H * 0.5;
+                ctx.fillStyle = '#e2e8f0';
+                ctx.fillRect(0, hRoadTop, W, hRoadBot - hRoadTop);
+
+                // Vertical Road (B): x from W*0.42 to W*0.58
+                const vRoadLeft = W * 0.42, vRoadRight = W * 0.58, vRoadCent = W * 0.5;
+                ctx.fillRect(vRoadLeft, 0, vRoadRight - vRoadLeft, H);
+
+                // Intersection overlay (lighter)
+                const intLeft = vRoadLeft, intRight = vRoadRight, intTop = hRoadTop, intBot = hRoadBot;
+                ctx.fillStyle = '#ced8e5';
+                ctx.fillRect(intLeft, intTop, intRight - intLeft, intBot - intTop);
+
+                // Road center dashes (skip intersection)
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([14, 10]);
+                ctx.beginPath();
+                ctx.moveTo(0, hRoadCent);
+                ctx.lineTo(intLeft, hRoadCent);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(intRight, hRoadCent);
+                ctx.lineTo(W, hRoadCent);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(vRoadCent, 0);
+                ctx.lineTo(vRoadCent, intTop);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(vRoadCent, intBot);
+                ctx.lineTo(vRoadCent, H);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Traffic lights (4 positions)
+                const tlSize = 14, tlH = 34, tlBorderRadius = 3;
+                const carColors = ['#3b82f6','#8b5cf6','#f59e0b','#ef4444','#10b981'];
+                
+                const isAGreen = state.phase === 'A_GREEN';
+                const isAmber = state.phase.includes('AMBER');
+                const isBGreen = state.phase === 'B_GREEN';
+
+                // Helper: draw traffic light
+                function drawTL(x, y, isGreen, isAmber, isRed) {
+                    ctx.fillStyle = '#1e293b';
+                    ctx.fillRect(x - tlSize/2, y - tlH/2, tlSize, tlH);
+                    // Top (Red)
+                    ctx.beginPath();
+                    ctx.arc(x, y - 11, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = isRed ? '#dc2626' : '#fca5a5';
+                    ctx.fill();
+                    // Mid (Amber)
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = isAmber ? '#f59e0b' : '#fde68a';
+                    ctx.fill();
+                    // Bot (Green)
+                    ctx.beginPath();
+                    ctx.arc(x, y + 11, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = isGreen ? '#16a34a' : '#bbf7d0';
+                    ctx.fill();
+                }
+
+                // Left (WEST), Right (EAST), Top (NORTH), Bottom (SOUTH)
+                drawTL(W*0.38, hRoadCent, isAGreen, isAmber && state.phase === 'AMBER_A', !(isAGreen || (isAmber && state.phase === 'AMBER_A')));
+                drawTL(W*0.62, hRoadCent, isAGreen, isAmber && state.phase === 'AMBER_A', !(isAGreen || (isAmber && state.phase === 'AMBER_A')));
+                drawTL(vRoadCent, H*0.38, isBGreen, isAmber && state.phase === 'AMBER_B', !(isBGreen || (isAmber && state.phase === 'AMBER_B')));
+                drawTL(vRoadCent, H*0.62, isBGreen, isAmber && state.phase === 'AMBER_B', !(isBGreen || (isAmber && state.phase === 'AMBER_B')));
+
+                // Countdown text
+                ctx.font = 'bold 12px Inter';
+                ctx.textAlign = 'center';
+                const countdownColor = isAmber ? '#f59e0b' : (state.phase === 'A_GREEN' ? '#16a34a' : state.phase === 'B_GREEN' ? '#16a34a' : '#dc2626');
+                ctx.fillStyle = countdownColor;
+                const emoji = isAmber ? '🟡' : (state.phase === 'A_GREEN' ? '🟢' : state.phase === 'B_GREEN' ? '🟢' : '🔴');
+                ctx.fillText(emoji + ' ' + state.phaseTimer + 'san', W*0.18, hRoadCent + 4);
+                ctx.fillText(emoji + ' ' + state.phaseTimer + 'san', W*0.82, hRoadCent + 4);
+                ctx.fillText(emoji + ' ' + state.phaseTimer + 'san', vRoadCent, H*0.18);
+                ctx.fillText(emoji + ' ' + state.phaseTimer + 'san', vRoadCent, H*0.82);
+
+                // Draw cars
+                const carW = 22, carH = 12;
+                
+                if (isAGreen || state.phase === 'AMBER_A') {
+                    state.simulationCars.forEach((car, i) => {
+                        if (car.road === 'A') {
+                            ctx.fillStyle = carColors[i % carColors.length];
+                            ctx.beginPath();
+                            ctx.roundRect(car.x - carW/2, hRoadCent - carH/2, carW, carH, 2);
+                            ctx.fill();
+                        }
+                    });
+                }
+                if (isBGreen || state.phase === 'AMBER_B') {
+                    state.simulationCars.forEach((car, i) => {
+                        if (car.road === 'B') {
+                            ctx.fillStyle = carColors[i % carColors.length];
+                            ctx.beginPath();
+                            ctx.roundRect(vRoadCent - carH/2, car.y - carW/2, carH, carW, 2);
+                            ctx.fill();
+                        }
+                    });
+                }
+
+                // AI label
+                ctx.font = '12px Inter';
+                ctx.fillStyle = '#2563eb';
+                ctx.textAlign = 'center';
+                let aiLabel = '';
+                if (state.phase === 'A_GREEN' && state.roadA_queue > 0) aiLabel = `AI Qərarı: A yolunda ${state.roadA_queue} maşın → 30 san yaşıl`;
+                else if (state.phase === 'A_GREEN' && state.roadA_queue === 0) aiLabel = 'AI Qərarı: A yolu boşaldı → B yoluna keç';
+                else if (state.phase === 'B_GREEN' && state.roadB_queue > 0) aiLabel = 'AI Qərarı: B yolunda 1 maşın → 8 san yaşıl (optimal)';
+                else if (state.phase === 'B_GREEN' && state.roadB_queue === 0) aiLabel = 'AI Qərarı: B yolu boş idi → minimal vaxt verildi';
+                else if (state.phase.includes('AMBER')) aiLabel = 'AI: Keçid fazası — sarı işıq';
+                ctx.fillText(aiLabel, W/2, H - 45);
+
+                // Stats
+                ctx.font = '11px Inter';
+                ctx.fillStyle = '#64748b';
+                ctx.textAlign = 'center';
+                ctx.fillText('A yolu keçdi: ' + state.roadAPassedCount + ' maşın', W*0.33, H - 20);
+                ctx.fillText('B yolu keçdi: ' + state.roadBPassedCount + ' maşın', W*0.67, H - 20);
+                ctx.fillText('Qənaət: 28%', W/2, H - 20);
+
+            } catch (err) {
+                console.error('drawSimulation', err);
+            }
+        }
+
+        // ─── UI RENDERER ───────────────────────────────────────
+        /**
+         * Render intersection cards
+         */
+        function renderIntersections() {
+            const container = document.getElementById('int-container');
+            container.innerHTML = state.intersections.map(ix => {
+                const elapsed = state.simHour - ix.greenStart;
+                const remaining = Math.max(0, ix.greenTimer - elapsed);
+                const fill = (remaining / ix.greenTimer) * 100;
+
+                return `
+                    <div class="int-card">
+                        <div class="int-header">
+                            <div class="int-name">${ix.name}</div>
+                            <div class="ai-badge">AI</div>
+                        </div>
+                        <div class="cross-grid">
+                            <div class="cross-cell"></div>
+                            <div class="cross-cell">
+                                <button class="arrow-btn ${ix.greenDir === 'north' ? 'green' : ''}">↑</button>
+                                <div class="car-count ${ix.greenDir === 'north' ? 'green' : ''}">${ix.queues.north}</div>
+                            </div>
+                            <div class="cross-cell"></div>
+                            <div class="cross-cell">
+                                <button class="arrow-btn ${ix.greenDir === 'west' ? 'green' : ''}">←</button>
+                                <div class="car-count ${ix.greenDir === 'west' ? 'green' : ''}">${ix.queues.west}</div>
+                            </div>
+                            <div class="cross-cell"><div class="center-dot"></div></div>
+                            <div class="cross-cell">
+                                <div class="car-count ${ix.greenDir === 'east' ? 'green' : ''}">${ix.queues.east}</div>
+                                <button class="arrow-btn ${ix.greenDir === 'east' ? 'green' : ''}">→</button>
+                            </div>
+                            <div class="cross-cell"></div>
+                            <div class="cross-cell">
+                                <button class="arrow-btn ${ix.greenDir === 'south' ? 'green' : ''}">↓</button>
+                                <div class="car-count ${ix.greenDir === 'south' ? 'green' : ''}">${ix.queues.south}</div>
+                            </div>
+                            <div class="cross-cell"></div>
+                        </div>
+                        <div class="timer-label">Yaşıl: ${Math.ceil(remaining)} san</div>
+                        <div class="timer-bar"><div class="timer-fill" style="width: ${fill}%"></div></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * Render camera grid
+         */
+        function renderCameras() {
+            const container = document.getElementById('cam-container');
+            container.innerHTML = CONFIG.CAMERAS.map((path, i) => `
+                <div class="cam-card" onclick="loadCamera('${path}')">
+                    <img src="${path}" alt="cam ${i+1}" onerror="this.style.display='none'">
+                    <div class="cam-overlay">
+                        <div class="cam-name">${CONFIG.INTERSECTIONS[i]}</div>
+                        <div class="cam-count">${state.intersections[i] ? Object.values(state.intersections[i].queues).reduce((a,b)=>a+b,0) : 0} maşın</div>
+                    </div>
+                    <div class="cam-rec"><div class="rec-dot"></div> REC</div>
+                    <div class="cam-scan"></div>
+                </div>
+            `).join('');
+        }
+
+        /**
+         * Update camera counts
+         */
+        function updateCameraCounts() {
+            document.querySelectorAll('.cam-count').forEach((el, i) => {
+                if (state.intersections[i]) {
+                    const total = Object.values(state.intersections[i].queues).reduce((a,b)=>a+b,0);
+                    el.textContent = total + ' maşın';
+                }
+            });
+        }
+
+        /**
+         * Render stats
+         */
+        function renderStats() {
+            const totalWaiting = state.intersections.reduce((s, ix) => 
+                s + Object.values(ix.queues).reduce((a,b)=>a+b,0), 0);
+
+            let reduction = 0;
+            if (state.tickCount > 5 && state.fixedTotal > 0) {
+                reduction = Math.max(0, ((state.fixedTotal - state.aiTotal) / state.fixedTotal * 100));
+                reduction = Math.min(40, reduction);
+            }
+
+            document.getElementById('stat-waiting').textContent = totalWaiting;
+            document.getElementById('stat-reduction').textContent = reduction.toFixed(1) + '%';
+            document.getElementById('stat-passed').textContent = state.carsPassed;
+            document.getElementById('stat-analysis').textContent = 'Aktiv';
+        }
+
+        /**
+         * Update chart and reduction metric
+         */
+        function updateChart(aiValue, fixedValue) {
+            if (!trafficChart) return;
+            
+            state.aiHistory.push(Math.round(aiValue));
+            state.fixedHistory.push(Math.round(fixedValue));
+            
+            if (state.aiHistory.length > 30) {
+                state.aiHistory.shift();
+                state.fixedHistory.shift();
+            }
+            
+            trafficChart.data.labels = state.aiHistory.map((_, i) => String(i));
+            trafficChart.data.datasets[0].data = [...state.aiHistory];
+            trafficChart.data.datasets[1].data = [...state.fixedHistory];
+            trafficChart.update('none');
+        }
+
+        /**
+         * Initialize simulation canvas with proper dimensions
+         */
+        function initSimCanvas() {
+            const canvas = document.getElementById('sim-canvas');
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = Math.max(rect.width, 700) || 700;
+            canvas.height = 320;
+        }
+
+        // ─── MAIN LOOP ────────────────────────────────────────
+        /**
+         * Main game tick
+         */
+        function tick() {
+            try {
+                if (state.running) {
+                    state.simHour += (1 / 3600) * state.simSpeed;
+                    if (state.simHour >= 24) state.simHour = 0;
+                    state.tickCount++;
+
+                    state.intersections.forEach(tickIntersection);
+
+                    // Phase timer tick (every 0.016s frame, approximate to 1s ticks)
+                    state.phaseTick = (state.phaseTick || 0) + 1;
+                    if (state.phaseTick >= 60) {
+                        state.phaseTick = 0;
+                        state.phaseTimer--;
+                        if (state.phaseTimer <= 0) {
+                            // Transition phase
+                            const AMBER_DURATION = 3;
+                            if (state.phase === 'A_GREEN') {
+                                state.phase = 'AMBER_A';
+                                state.phaseTimer = AMBER_DURATION;
+                            } else if (state.phase === 'AMBER_A') {
+                                state.phase = 'B_GREEN';
+                                state.phaseTimer = (state.roadB_queue === 0) ? 8 : 30;
+                            } else if (state.phase === 'B_GREEN') {
+                                state.phase = 'AMBER_B';
+                                state.phaseTimer = AMBER_DURATION;
+                            } else if (state.phase === 'AMBER_B') {
+                                state.phase = 'A_GREEN';
+                                state.phaseTimer = (state.roadA_queue === 0) ? 8 : 30;
+                            }
+                        }
+
+                        // Update chart every second (~60 frames)
+                        const aiVal = state.intersections.reduce((sum, ix) =>
+                            sum + Object.values(ix.queues).reduce((a, b) => a + b, 0), 0);
+                        const fixedVal = Math.round(aiVal * 1.28 + (Math.random() * 12 - 6));
+                        updateChart(aiVal, fixedVal);
+                    }
+
+                    // Car spawning and movement
+                    const isAGreen = state.phase === 'A_GREEN';
+                    const isBGreen = state.phase === 'B_GREEN';
+                    const isAmber = state.phase.includes('AMBER');
+
+                    if (isAGreen) {
+                        state.lastCarSpawnA = (state.lastCarSpawnA || 0) + 0.016;
+                        if (state.lastCarSpawnA > 3 && state.simulationCars.filter(c => c.road === 'A').length < state.roadA_queue && state.roadA_queue > 0) {
+                            state.lastCarSpawnA = 0;
+                            state.simulationCars.push({road: 'A', x: -30, speed: 1.8});
+                            state.roadA_queue--;
+                        }
+                    }
+                    if (isBGreen && state.roadB_queue > 0) {
+                        if (!state.bCarSpawned) {
+                            state.simulationCars.push({road: 'B', y: -30, speed: 1.8});
+                            state.roadB_queue--;
+                            state.bCarSpawned = true;
+                        }
+                    }
+
+                    // Update car positions
+                    state.simulationCars.forEach(car => {
+                        if (car.road === 'A') {
+                            car.x += car.speed;
+                        } else if (car.road === 'B') {
+                            car.y += car.speed;
+                        }
+                    });
+
+                    // Remove off-screen cars
+                    state.simulationCars = state.simulationCars.filter(car => {
+                        if (car.road === 'A' && car.x > document.getElementById('sim-canvas').clientWidth + 50) {
+                            state.roadAPassedCount++;
+                            return false;
+                        }
+                        if (car.road === 'B' && car.y > document.getElementById('sim-canvas').clientHeight + 50) {
+                            state.roadBPassedCount++;
+                            return false;
+                        }
+                        return true;
+                    });
+                }
+
+                renderIntersections();
+                renderStats();
+                updateCameraCounts();
+                drawSimulation(document.getElementById('sim-canvas'));
+
+                const h = Math.floor(state.simHour);
+                const m = Math.floor((state.simHour % 1) * 60);
+                const s = Math.floor(((state.simHour % 1) * 60 % 1) * 60);
+                document.getElementById('clock').textContent = 
+                    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+                requestAnimationFrame(tick);
+            } catch (err) {
+                console.error('tick', err);
+                requestAnimationFrame(tick);
+            }
+        }
+
+        /**
+         * Initialize application
+         */
+        function init() {
+            try {
+                state.intersections = CONFIG.INTERSECTIONS.map((name, i) => createIntersection(name, i));
+
+                // Chart
+                const chartCanvas = document.getElementById('trafficChart');
+                trafficChart = new Chart(chartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'AI Sistemi',
+                                data: [],
+                                borderColor: '#2563eb',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                tension: 0.3,
+                                fill: false
+                            },
+                            {
+                                label: 'Sabit Sistem',
+                                data: [],
+                                borderColor: '#94a3b8',
+                                borderDash: [4, 4],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                tension: 0.3,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: false }
+                        },
+                        scales: {
+                            x: { display: false },
+                            y: {
+                                min: 0,
+                                suggestedMax: 500,
+                                grid: { color: '#f1f5f9', lineWidth: 1, drawBorder: false },
+                                border: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 9 },
+                                    maxTicksLimit: 4
+                                }
+                            }
+                        }
+                    }
+                });
+
+                renderIntersections();
+                renderCameras();
+                renderStats();
+
+                // Initialize canvas with proper dimensions
+                setTimeout(initSimCanvas, 50);
+
+                // Start main loop
+                tick();
+            } catch (err) {
+                console.error('init', err);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            init();
+            window.addEventListener('resize', initSimCanvas);
+        });
+    </script>
+</body>
+</html>
