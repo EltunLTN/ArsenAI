@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Smart Traffic Simulation - Two Intersections</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e1116;
+    color: #e6e6e6;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 { font-size: 20px; margin-bottom: 10px; letter-spacing: 1px; }
+  #wrapper {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  canvas {
+    background: #1c1f26;
+    border: 2px solid #333;
+    border-radius: 8px;
+    display: block;
+  }
+  #panel {
+    background: #181b22;
+    border: 1px solid #2a2e38;
+    border-radius: 8px;
+    padding: 16px;
+    width: 280px;
+  }
+  #panel h2 {
+    font-size: 14px;
+    margin-bottom: 10px;
+    color: #9fd0ff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #2a3140;
+    color: #fff;
+    border: 1px solid #3a4252;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #364056; }
+  .stat { font-size: 13px; line-height: 1.6; margin-top: 4px; color: #cfd6e0; }
+  .stat span { color: #ffcb6b; font-weight: bold; }
+  hr { border: none; border-top: 1px solid #2a2e38; margin: 12px 0; }
+  .legend { font-size: 12px; color: #aab3c2; line-height: 1.7; }
+  .swatch { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 2px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<h1>SMART TRAFFIC SIMULATION — TWO CONNECTED INTERSECTIONS WITH GREEN WAVE</h1>
+<div id="wrapper">
+  <canvas id="cv" width="1300" height="700"></canvas>
+  <div id="panel">
+    <h2>Controls</h2>
+    <button id="btnStart">Pause Simulation</button>
+    <button id="btnEmergency">Trigger Emergency</button>
+    <button id="btnAccident">Trigger Accident</button>
+    <button id="btnPedestrian">Add Pedestrian</button>
+    <button id="btnWheelchair">Add Wheelchair Pedestrian</button>
+    <hr />
+    <h2>Status</h2>
+    <div class="stat">Intersection 1: <span id="sP1">-</span></div>
+    <div class="stat">Intersection 2: <span id="sP2">-</span></div>
+    <div class="stat">Mode: <span id="sMode">Normal</span></div>
+    <div class="stat">Cars on road: <span id="sTotal">0</span></div>
+    <div class="stat">Pedestrians: <span id="sPed">0</span></div>
+    <div class="stat">Green wave: <span id="sWave">idle</span></div>
+    <hr />
+    <h2>Legend</h2>
+    <div class="legend">
+      <div><span class="swatch" style="background:#3498db"></span>Normal Car</div>
+      <div><span class="swatch" style="background:#e74c3c"></span>Ambulance</div>
+      <div><span class="swatch" style="background:#2ecc71"></span>Pedestrian</div>
+      <div><span class="swatch" style="background:#f1c40f"></span>Slow Pedestrian</div>
+      <div><span class="swatch" style="background:#9b59b6"></span>Wheelchair Pedestrian</div>
+      <div><span class="swatch" style="background:#ff5050"></span>Accident — All Red</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+console.log("[traffic-sim] script loaded");
+
+// -------------------- Canvas / world setup --------------------
+const canvas = document.getElementById("cv");
+const ctx = canvas.getContext("2d");
+const W = canvas.width;   // 1300
+const H = canvas.height;  // 700
+const ROAD_W = 120;
+const LANE_W = ROAD_W / 2;
+const CY = H / 2;          // horizontal road centerline
+const CX1 = 350;           // intersection 1 center x
+const CX2 = 950;           // intersection 2 center x (600 px apart)
+console.log("[traffic-sim] world", W, "x", H, "intersections at", CX1, CX2);
+
+function makeInterBounds(cx) {
+  return {
+    cx: cx,
+    cy: CY,
+    left:   cx - ROAD_W / 2,
+    right:  cx + ROAD_W / 2,
+    top:    CY - ROAD_W / 2,
+    bottom: CY + ROAD_W / 2,
+  };
+}
+
+// -------------------- Car class --------------------
+class Car {
+  constructor(direction, isAmbulance, vroad) {
+    this.dir = direction;
+    this.isAmbulance = !!isAmbulance;
+    this.vroad = vroad || null; // for N/S cars: which vertical road (CX1 or CX2)
+    this.w = 22;
+    this.h = 38;
+    this.color = this.isAmbulance ? "#e74c3c" : "#3498db";
+    this.maxSpeed = this.isAmbulance ? 3.4 : 1.8;
+    this.speed = this.maxSpeed;
+    this.stopped = false;
+    this.passedThrough = new Set(); // intersection cx values this car has passed
+
+    if (direction === "N") {
+      this.x = vroad + LANE_W / 2;
+      this.y = H + this.h;
+      this.vx = 0; this.vy = -1;
+    } else if (direction === "S") {
+      this.x = vroad - LANE_W / 2;
+      this.y = -this.h;
+      this.vx = 0; this.vy = 1;
+    } else if (direction === "E") {
+      this.x = -this.w;
+      this.y = CY + LANE_W / 2;
+      this.vx = 1; this.vy = 0;
+    } else if (direction === "W") {
+      this.x = W + this.w;
+      this.y = CY - LANE_W / 2;
+      this.vx = -1; this.vy = 0;
+    }
+  }
+
+  frontPos() {
+    if (this.dir === "N") return this.y - this.h / 2;
+    if (this.dir === "S") return this.y + this.h / 2;
+    if (this.dir === "E") return this.x + this.w / 2;
+    return this.x - this.w / 2;
+  }
+  // Distance from car's front to a stop line at this intersection (positive => not yet there)
+  distanceToStopLineFor(intr) {
+    if (this.dir === "N") return (this.y - this.h / 2) - (intr.bottom + 4);
+    if (this.dir === "S") return (intr.top - 4) - (this.y + this.h / 2);
+    if (this.dir === "E") return (intr.left - 4) - (this.x + this.w / 2);
+    return (this.x - this.w / 2) - (intr.right + 4); // W
+  }
+  isOffscreen() {
+    return this.x < -60 || this.x > W + 60 || this.y < -60 || this.y > H + 60;
+  }
+
+  gapTo(other) {
+    if (!other) return Infinity;
+    if (this.dir === "N") {
+      if (other.y > this.y) return Infinity;
+      return (this.y - this.h / 2) - (other.y + other.h / 2);
+    }
+    if (this.dir === "S") {
+      if (other.y < this.y) return Infinity;
+      return (other.y - other.h / 2) - (this.y + this.h / 2);
+    }
+    if (this.dir === "E") {
+      if (other.x < this.x) return Infinity;
+      return (other.x - other.w / 2) - (this.x + this.w / 2);
+    }
+    if (other.x > this.x) return Infinity;
+    return (this.x - this.w / 2) - (other.x + other.w / 2);
+  }
+
+  // intr is the next intersection ahead (or null if past all). green = lights green for this car at intr.
+  update(carAhead, intr, greenAtIntr) {
+    let mustStop = false;
+
+    if (intr) {
+      const d = this.distanceToStopLineFor(intr);
+      if (!greenAtIntr && d > 0 && d < 80) mustStop = true;
+    }
+    if (this.isAmbulance) mustStop = false;
+
+    let blocked = false;
+    if (carAhead) {
+      const gap = this.gapTo(carAhead);
+      if (gap < 12) blocked = true;
+      else if (gap < 30) this.speed = Math.min(this.speed, carAhead.speed * 0.7);
+      else this.speed = Math.min(this.maxSpeed, this.speed + 0.05);
+    } else {
+      this.speed = Math.min(this.maxSpeed, this.speed + 0.05);
+    }
+
+    if (mustStop || blocked) {
+      this.speed = 0;
+      this.stopped = true;
+    } else {
+      this.stopped = false;
+      if (this.speed === 0) this.speed = 0.5;
+    }
+
+    this.x += this.vx * this.speed;
+    this.y += this.vy * this.speed;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    let angle = 0;
+    if (this.dir === "E") angle = Math.PI / 2;
+    if (this.dir === "W") angle = -Math.PI / 2;
+    if (this.dir === "S") angle = Math.PI;
+    ctx.rotate(angle);
+
+    ctx.fillStyle = this.color;
+    ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillRect(-this.w / 2 + 3, -this.h / 2 + 6, this.w - 6, 8);
+
+    if (this.isAmbulance) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(-3, -4, 6, 8);
+      ctx.fillRect(-6, -1, 12, 2);
+      const flash = (Math.floor(Date.now() / 150) % 2 === 0) ? "#fff" : "#3498db";
+      ctx.fillStyle = flash;
+      ctx.fillRect(-this.w / 2, -this.h / 2 - 3, this.w, 3);
+    }
+    ctx.restore();
+  }
+}
+
+// -------------------- TrafficLight --------------------
+class TrafficLight {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.state = "red";
+  }
+  draw(ctx) {
+    ctx.fillStyle = "#111";
+    ctx.fillRect(this.x - 9, this.y - 24, 18, 48);
+    const lamps = ["red", "yellow", "green"];
+    for (let i = 0; i < 3; i++) {
+      const cy = this.y - 15 + i * 15;
+      const on = lamps[i] === this.state;
+      ctx.beginPath();
+      ctx.arc(this.x, cy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = on
+        ? (lamps[i] === "red" ? "#ff3b3b" : lamps[i] === "yellow" ? "#ffe14d" : "#33e66e")
+        : "#222";
+      ctx.fill();
+      if (on) {
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+}
+
+// -------------------- Pedestrian --------------------
+// Each pedestrian belongs to ONE intersection.
+class Pedestrian {
+  constructor(type, crosswalk, intr) {
+    this.type = type;
+    this.crosswalk = crosswalk;
+    this.intr = intr;
+
+    if (type === "wheelchair") { this.color = "#9b59b6"; this.speed = 0.55; }
+    else if (type === "slow")  { this.color = "#f1c40f"; this.speed = 0.7;  }
+    else                        { this.color = "#2ecc71"; this.speed = 1.4;  }
+    this.r = 6;
+
+    const j = (Math.random() - 0.5) * 8;
+    if (crosswalk === "N") {
+      this.y = intr.top - 8 + j * 0.4;
+      if (Math.random() < 0.5) {
+        this.x = intr.left - 14;  this.vx = 1; this.vy = 0;
+        this.target = intr.right + 14; this.axis = "x"; this.dir = 1;
+      } else {
+        this.x = intr.right + 14; this.vx = -1; this.vy = 0;
+        this.target = intr.left - 14;  this.axis = "x"; this.dir = -1;
+      }
+    } else if (crosswalk === "S") {
+      this.y = intr.bottom + 8 + j * 0.4;
+      if (Math.random() < 0.5) {
+        this.x = intr.left - 14;  this.vx = 1; this.vy = 0;
+        this.target = intr.right + 14; this.axis = "x"; this.dir = 1;
+      } else {
+        this.x = intr.right + 14; this.vx = -1; this.vy = 0;
+        this.target = intr.left - 14;  this.axis = "x"; this.dir = -1;
+      }
+    } else if (crosswalk === "E") {
+      this.x = intr.right + 8 + j * 0.4;
+      if (Math.random() < 0.5) {
+        this.y = intr.top - 14;   this.vx = 0; this.vy = 1;
+        this.target = intr.bottom + 14; this.axis = "y"; this.dir = 1;
+      } else {
+        this.y = intr.bottom + 14; this.vx = 0; this.vy = -1;
+        this.target = intr.top - 14;    this.axis = "y"; this.dir = -1;
+      }
+    } else { // W
+      this.x = intr.left - 8 + j * 0.4;
+      if (Math.random() < 0.5) {
+        this.y = intr.top - 14;   this.vx = 0; this.vy = 1;
+        this.target = intr.bottom + 14; this.axis = "y"; this.dir = 1;
+      } else {
+        this.y = intr.bottom + 14; this.vx = 0; this.vy = -1;
+        this.target = intr.top - 14;    this.axis = "y"; this.dir = -1;
+      }
+    }
+  }
+
+  canWalk(phase) {
+    if (this.crosswalk === "N" || this.crosswalk === "S") {
+      // crosses vertical road; safe when N-S is red
+      return phase === "H_GREEN" || phase === "H_YELLOW";
+    }
+    return phase === "V_GREEN" || phase === "V_YELLOW";
+  }
+  inDangerZone() {
+    if (this.crosswalk === "N" || this.crosswalk === "S") {
+      return this.x > this.intr.left - 4 && this.x < this.intr.right + 4;
+    }
+    return this.y > this.intr.top - 4 && this.y < this.intr.bottom + 4;
+  }
+  update(phase) {
+    // Always allow movement during accident (all-red is safe to cross too)
+    // and during emergency the cross-axis is red so existing rule still works.
+    if (this.canWalk(phase) || this.inDangerZone()) {
+      this.x += this.vx * this.speed;
+      this.y += this.vy * this.speed;
+    }
+  }
+  done() {
+    if (this.axis === "x") return this.dir > 0 ? this.x > this.target : this.x < this.target;
+    return this.dir > 0 ? this.y > this.target : this.y < this.target;
+  }
+  draw(ctx) {
+    ctx.save();
+    if (this.type === "wheelchair") {
+      ctx.fillStyle = this.color;
+      ctx.beginPath(); ctx.arc(this.x, this.y - 1, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f1d3a8";
+      ctx.beginPath(); ctx.arc(this.x, this.y - 8, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(this.x - 5, this.y + 5, 3.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(this.x + 5, this.y + 5, 3.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#1a1a1a";
+      ctx.beginPath(); ctx.arc(this.x - 5, this.y + 5, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x + 5, this.y + 5, 1, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f1d3a8";
+      ctx.beginPath(); ctx.arc(this.x, this.y - 5, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// -------------------- Intersection --------------------
+class Intersection {
+  constructor(id, cx, phaseTimeOffset) {
+    this.id = id;
+    Object.assign(this, makeInterBounds(cx));
+
+    this.lights = {
+      N: new TrafficLight(this.right + 24, this.bottom + 24),
+      S: new TrafficLight(this.left  - 24, this.top    - 24),
+      E: new TrafficLight(this.left  - 24, this.bottom + 24),
+      W: new TrafficLight(this.right + 24, this.top    - 24),
+    };
+
+    // Each intersection runs its own cycle. We start them at different
+    // phase offsets so they are NEVER in lock-step — that's the foundation
+    // of the green wave.
+    this.phase = "V_GREEN";
+    this.phaseTime = phaseTimeOffset || 0;
+    this.baseDurations = {
+      V_GREEN: 20000, V_YELLOW: 2000, H_GREEN: 8000, H_YELLOW: 2000,
+    };
+
+    this.emergencyMode = false;
+    this.emergencyDir = null;
+    this.emergencyPhase = null;        // YELLOW_IN | GREEN | YELLOW_OUT
+    this.emergencyTimer = 0;
+    this.emergencyAmbId = null;        // which ambulance triggered it
+
+    this.accidentMode = false;
+
+    this.pedestrians = [];
+
+    this.applyPhaseLights();
+  }
+  opp(d) { return { N:"S", S:"N", E:"W", W:"E" }[d]; }
+
+  applyPhaseLights() {
+    if (this.accidentMode) {
+      for (const d of ["N","S","E","W"]) this.lights[d].state = "red";
+      return;
+    }
+    if (this.emergencyMode && this.emergencyPhase === "GREEN") {
+      for (const d of ["N","S","E","W"]) {
+        const onAxis = (d === this.emergencyDir || this.opp(d) === this.emergencyDir);
+        this.lights[d].state = onAxis ? "green" : "red";
+      }
+      return;
+    }
+    if (this.emergencyMode && (this.emergencyPhase === "YELLOW_IN" || this.emergencyPhase === "YELLOW_OUT")) {
+      for (const d of ["N","S","E","W"]) {
+        const onAxis = (d === this.emergencyDir || this.opp(d) === this.emergencyDir);
+        this.lights[d].state = onAxis ? "yellow" : "red";
+      }
+      return;
+    }
+    if (this.phase === "V_GREEN") {
+      this.lights.N.state = "green"; this.lights.S.state = "green";
+      this.lights.E.state = "red";   this.lights.W.state = "red";
+    } else if (this.phase === "V_YELLOW") {
+      this.lights.N.state = "yellow"; this.lights.S.state = "yellow";
+      this.lights.E.state = "red";    this.lights.W.state = "red";
+    } else if (this.phase === "H_GREEN") {
+      this.lights.N.state = "red";    this.lights.S.state = "red";
+      this.lights.E.state = "green";  this.lights.W.state = "green";
+    } else if (this.phase === "H_YELLOW") {
+      this.lights.N.state = "red";    this.lights.S.state = "red";
+      this.lights.E.state = "yellow"; this.lights.W.state = "yellow";
+    }
+  }
+  isGreen(d) { return this.lights[d].state === "green"; }
+
+  hasWheelchairOn(set) {
+    for (const p of this.pedestrians) {
+      if (p.type === "wheelchair" && set.indexOf(p.crosswalk) !== -1 && !p.done()) return true;
+    }
+    return false;
+  }
+  currentPhaseDuration() {
+    let d = this.baseDurations[this.phase];
+    // Wheelchair on N/S crosswalk needs N-S red of 20 s total -> H_GREEN extended to 18 s
+    if (this.phase === "H_GREEN" && this.hasWheelchairOn(["N","S"])) d = 18000;
+    return d;
+  }
+
+  // Strict cycle, never skip a phase
+  advancePhase() {
+    const order = ["V_GREEN", "V_YELLOW", "H_GREEN", "H_YELLOW"];
+    this.phase = order[(order.indexOf(this.phase) + 1) % order.length];
+    this.phaseTime = 0;
+    this.applyPhaseLights();
+    console.log("[traffic-sim] int", this.id, "phase ->", this.phase);
+  }
+
+  triggerEmergency(dir, ambId) {
+    if (this.accidentMode) return;
+    if (this.emergencyMode) return;
+    this.emergencyMode = true;
+    this.emergencyDir = dir;
+    this.emergencyPhase = "YELLOW_IN";
+    this.emergencyTimer = 0;
+    this.emergencyAmbId = ambId || null;
+    this.applyPhaseLights();
+    console.log("[traffic-sim] int", this.id, "EMERGENCY", dir);
+  }
+  // Resume after emergency: continue cycle at the *yellow* of the axis we were on,
+  // so the same direction cannot do green->yellow->green again.
+  endEmergency() {
+    const dir = this.emergencyDir;
+    this.emergencyMode = false;
+    this.emergencyDir = null;
+    this.emergencyPhase = null;
+    this.emergencyTimer = 0;
+    this.emergencyAmbId = null;
+    if (dir === "N" || dir === "S") {
+      // ambulance was on vertical axis -> next normal phase is V_YELLOW so cars get red
+      this.phase = "V_YELLOW";
+    } else {
+      this.phase = "H_YELLOW";
+    }
+    this.phaseTime = 0;
+    this.applyPhaseLights();
+    console.log("[traffic-sim] int", this.id, "emergency cleared, resume", this.phase);
+  }
+
+  triggerAccident() {
+    if (this.accidentMode) return;
+    // accidents force-end any emergency
+    if (this.emergencyMode) {
+      this.emergencyMode = false;
+      this.emergencyDir = null;
+      this.emergencyPhase = null;
+      this.emergencyTimer = 0;
+      this.emergencyAmbId = null;
+    }
+    this.accidentMode = true;
+    this.applyPhaseLights();
+    console.log("[traffic-sim] int", this.id, "ACCIDENT — all red");
+  }
+  clearAccident() {
+    if (!this.accidentMode) return;
+    this.accidentMode = false;
+    this.phase = "V_GREEN";
+    this.phaseTime = 0;
+    this.applyPhaseLights();
+    console.log("[traffic-sim] int", this.id, "accident cleared");
+  }
+
+  // Update lights / phase for this intersection
+  update(dt) {
+    if (this.accidentMode) {
+      // Lights stay all red; nothing else to do
+      return;
+    }
+    if (this.emergencyMode) {
+      this.emergencyTimer += dt;
+      if (this.emergencyPhase === "YELLOW_IN" && this.emergencyTimer > 1500) {
+        this.emergencyPhase = "GREEN";
+        this.emergencyTimer = 0;
+        this.applyPhaseLights();
+      }
+      // GREEN phase exit is decided externally (when the ambulance has cleared this intersection)
+      if (this.emergencyPhase === "YELLOW_OUT" && this.emergencyTimer > 1500) {
+        this.endEmergency();
+      }
+      return;
+    }
+    this.phaseTime += dt;
+    if (this.phaseTime > this.currentPhaseDuration()) {
+      this.advancePhase();
+    }
+  }
+
+  drawRoadsAndCrosswalks(ctx) {
+    // intersection square
+    ctx.fillStyle = "#33363d";
+    ctx.fillRect(this.left, this.top, ROAD_W, ROAD_W);
+
+    // stop lines
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(this.cx, this.bottom + 2); ctx.lineTo(this.cx + ROAD_W/2, this.bottom + 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(this.cx - ROAD_W/2, this.top - 2); ctx.lineTo(this.cx, this.top - 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(this.left - 2, this.cy); ctx.lineTo(this.left - 2, this.cy + ROAD_W/2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(this.right + 2, this.cy - ROAD_W/2); ctx.lineTo(this.right + 2, this.cy); ctx.stroke();
+
+    // crosswalks
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    for (let i = 0; i < 6; i++) {
+      const x = this.left + 4 + i * 19;
+      ctx.fillRect(x, this.top - 14, 12, 12);
+      ctx.fillRect(x, this.bottom + 2, 12, 12);
+    }
+    for (let i = 0; i < 6; i++) {
+      const y = this.top + 4 + i * 19;
+      ctx.fillRect(this.left - 14, y, 12, 12);
+      ctx.fillRect(this.right + 2, y, 12, 12);
+    }
+
+    // accident decoration
+    if (this.accidentMode) {
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      const t = (Math.floor(Date.now() / 250) % 2);
+      ctx.fillStyle = t ? "#ff5050" : "#ffae42";
+      ctx.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const r = (k % 2 === 0) ? 28 : 14;
+        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 14px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.fillText("!", 0, 5);
+      ctx.restore();
+    }
+  }
+  drawLights(ctx) { for (const k in this.lights) this.lights[k].draw(ctx); }
+  drawPedestrians(ctx) { for (const p of this.pedestrians) p.draw(ctx); }
+  drawLabel(ctx) {
+    ctx.fillStyle = "#9fd0ff";
+    ctx.font = "bold 14px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText("INTERSECTION " + this.id, this.cx, this.top - 36);
+  }
+}
+
+// -------------------- Simulation --------------------
+class Simulation {
+  constructor() {
+    // Approximate cruising speed of a normal car (px/frame).
+    // We use this to predict travel time between intersections.
+    this.cruiseSpeed = 1.8;
+    this.frameMs = 1000 / 60;
+
+    // Distance a car must cover from one intersection's stop line to the next.
+    // We compute it from world coords so it matches the actual layout.
+    const interGap = (CX2 - ROAD_W / 2) - (CX1 + ROAD_W / 2); // edge-to-edge
+    this.travelTimeMs = (interGap / this.cruiseSpeed) * this.frameMs;
+
+    // Pre-bias intersection 2 so that its H_GREEN starts ~travelTime AFTER
+    // intersection 1's H_GREEN. This gives east-bound cars a "green wave"
+    // out of the box. West-bound cars are handled by the event-driven
+    // override below.
+    const offset = -this.travelTimeMs; // negative = int2 is "behind" int1
+
+    this.intersections = [
+      new Intersection(1, CX1, 0),
+      new Intersection(2, CX2, offset),
+    ];
+    this.cars = [];
+    this.running = true;
+
+    this.lastSpawnV1 = 0;
+    this.lastSpawnV2 = 0;
+    this.lastSpawnH = 0;
+    this.lastPed = 0;
+
+    this.greenWaveActive = "idle";
+    this.greenWaveInfo = "";
+    console.log("[traffic-sim] travel time", this.travelTimeMs.toFixed(0),
+      "ms, int2 phase offset", offset.toFixed(0), "ms");
+  }
+
+  // Which intersection should this car obey *next*? null if past all.
+  nextIntersectionFor(car) {
+    if (car.dir === "E") {
+      const ahead = this.intersections.filter(i => car.x + car.w/2 < i.left - 2);
+      return ahead[0] || null;
+    }
+    if (car.dir === "W") {
+      const ahead = this.intersections.filter(i => car.x - car.w/2 > i.right + 2);
+      ahead.sort((a,b) => b.cx - a.cx);
+      return ahead[0] || null;
+    }
+    if (car.dir === "N") {
+      // approaching from south (below the road) on its vertical road
+      const intr = this.intersections.find(i => Math.abs(i.cx - car.vroad) < 2);
+      if (!intr) return null;
+      return car.y - car.h/2 > intr.bottom + 2 ? intr : null;
+    }
+    if (car.dir === "S") {
+      const intr = this.intersections.find(i => Math.abs(i.cx - car.vroad) < 2);
+      if (!intr) return null;
+      return car.y + car.h/2 < intr.top - 2 ? intr : null;
+    }
+    return null;
+  }
+
+  spawnCar(dir, isAmbulance, vroad) {
+    // Ambulances are always spawned regardless of congestion
+    if (!isAmbulance) {
+      for (const c of this.cars) {
+        if (c.dir !== dir) continue;
+        if (dir === "N" && c.vroad === vroad && c.y > H - 60) return;
+        if (dir === "S" && c.vroad === vroad && c.y < 60)     return;
+        if (dir === "E" && c.x < 60)     return;
+        if (dir === "W" && c.x > W - 60) return;
+      }
+    }
+    this.cars.push(new Car(dir, isAmbulance, vroad));
+  }
+
+  triggerEmergency(forceDir) {
+    // Spawn ONE ambulance from a random direction (or forced).
+    // Each intersection yields automatically as the ambulance approaches.
+    const dir = forceDir || ["N","S","E","W"][Math.floor(Math.random()*4)];
+    let vroad = null;
+    if (dir === "N" || dir === "S") {
+      vroad = Math.random() < 0.5 ? CX1 : CX2;
+    }
+    this.cars.push(new Car(dir, true, vroad));
+    console.log("[traffic-sim] AMBULANCE spawned dir", dir, "vroad", vroad);
+  }
+
+  triggerAccident() {
+    // Toggle accident on any intersection that doesn't already have one,
+    // otherwise clear all accidents.
+    const without = this.intersections.filter(i => !i.accidentMode);
+    if (without.length === 0) {
+      for (const i of this.intersections) i.clearAccident();
+      return;
+    }
+    const target = without[Math.floor(Math.random() * without.length)];
+    target.triggerAccident();
+  }
+
+  addPedestrian(type) {
+    const intr = this.intersections[Math.floor(Math.random() * this.intersections.length)];
+    let crosswalk;
+    if (type === "wheelchair") crosswalk = Math.random() < 0.5 ? "N" : "S";
+    else                       crosswalk = ["N","S","E","W"][Math.floor(Math.random()*4)];
+    intr.pedestrians.push(new Pedestrian(type, crosswalk, intr));
+    console.log("[traffic-sim] ped", type, "@ int", intr.id, crosswalk);
+  }
+
+  // Auto-yield to ambulances and end emergency once they pass.
+  ambulanceLogic() {
+    const ambs = this.cars.filter(c => c.isAmbulance);
+    for (const intr of this.intersections) {
+      if (intr.accidentMode) continue;
+
+      // Find the nearest ambulance that hasn't already passed this intersection.
+      let nearestAmb = null, nearestDist = Infinity;
+      for (const amb of ambs) {
+        const d = amb.distanceToStopLineFor(intr);
+        // For N/S ambulance, only relevant if same vertical road
+        if ((amb.dir === "N" || amb.dir === "S") && Math.abs(amb.vroad - intr.cx) > 2) continue;
+        // Has it already passed THIS intersection's far edge?
+        const passed =
+          (amb.dir === "E" && amb.x - amb.w/2 > intr.right + 2) ||
+          (amb.dir === "W" && amb.x + amb.w/2 < intr.left - 2) ||
+          (amb.dir === "N" && amb.y + amb.h/2 < intr.top - 2) ||
+          (amb.dir === "S" && amb.y - amb.h/2 > intr.bottom + 2);
+        if (passed) continue;
+        if (Math.abs(d) < nearestDist) { nearestDist = Math.abs(d); nearestAmb = amb; }
+      }
+
+      // Trigger emergency if an ambulance is within 280 px of the stop line
+      if (nearestAmb && !intr.emergencyMode && nearestDist < 280) {
+        intr.triggerEmergency(nearestAmb.dir, nearestAmb);
+      }
+
+      // If we're in emergency, end it once the triggering ambulance is past
+      if (intr.emergencyMode && intr.emergencyPhase === "GREEN") {
+        const stillThere = ambs.find(a => {
+          if ((a.dir === "N" || a.dir === "S") && Math.abs(a.vroad - intr.cx) > 2) return false;
+          const passed =
+            (a.dir === "E" && a.x - a.w/2 > intr.right + 2) ||
+            (a.dir === "W" && a.x + a.w/2 < intr.left - 2) ||
+            (a.dir === "N" && a.y + a.h/2 < intr.top - 2) ||
+            (a.dir === "S" && a.y - a.h/2 > intr.bottom + 2);
+          return !passed && a.dir === intr.emergencyDir;
+        });
+        // require minimum 1.5 s in GREEN so user can see it; safety timeout 12 s
+        if ((!stillThere && intr.emergencyTimer > 1500) || intr.emergencyTimer > 12000) {
+          intr.emergencyPhase = "YELLOW_OUT";
+          intr.emergencyTimer = 0;
+          intr.applyPhaseLights();
+        }
+      }
+    }
+  }
+
+  // Green-wave: for every car between the two intersections, compute the time
+  // it will take to reach the *next* intersection's stop line, and adjust that
+  // intersection's lights so they are GREEN when the car arrives.
+  //
+  //   tt = distance_to_stop_line / cruise_speed
+  //
+  // If the next intersection is currently V_GREEN, we cut V_GREEN short so the
+  // V_YELLOW (2 s) finishes just in time. If it's already H_GREEN we keep it
+  // green long enough for the car to clear it (we extend H_GREEN, never repeat
+  // the same green twice in a row).
+  greenWave() {
+    this.greenWaveActive = "idle";
+    this.greenWaveInfo = "";
+    const a = this.intersections[0]; // left
+    const b = this.intersections[1]; // right
+
+    // East-bound cars between a and b approaching b
+    const eastCars = this.cars.filter(c => c.dir === "E" && !c.isAmbulance &&
+      c.x > a.right && (c.x + c.w / 2) < b.left - 4);
+    if (eastCars.length > 0) {
+      const lead = eastCars.reduce((p, c) => c.x > p.x ? c : p);
+      this._applyWave(lead, b, "E");
+    }
+    // West-bound cars between a and b approaching a
+    const westCars = this.cars.filter(c => c.dir === "W" && !c.isAmbulance &&
+      c.x < b.left && (c.x - c.w / 2) > a.right + 4);
+    if (westCars.length > 0) {
+      const lead = westCars.reduce((p, c) => c.x < p.x ? c : p);
+      this._applyWave(lead, a, "W");
+    }
+  }
+
+  _applyWave(car, target, dir) {
+    if (target.emergencyMode || target.accidentMode) return;
+
+    // Distance from car's front to target's stop line
+    let dist;
+    if (dir === "E") dist = (target.left  - 4) - (car.x + car.w / 2);
+    else             dist = (car.x - car.w / 2) - (target.right + 4);
+    if (dist <= 0) return;
+
+    // Predict arrival using cruise speed (cars accelerate back to it quickly)
+    const speed = Math.max(car.speed, this.cruiseSpeed * 0.6);
+    const ttMs = (dist / speed) * this.frameMs;
+
+    const VY = target.baseDurations.V_YELLOW; // 2000
+
+    if (target.phase === "V_GREEN") {
+      // To reach H_GREEN we still need V_YELLOW (2 s).
+      // If car will arrive in less than (V_YELLOW + 0.5 s buffer), cut V_GREEN now.
+      if (ttMs < VY + 1200) {
+        target.phaseTime = target.baseDurations.V_GREEN; // forces advancePhase next tick
+      }
+    } else if (target.phase === "H_GREEN") {
+      // Already green — keep it green until the car has passed.
+      // Reset phaseTime so at least (ttMs + 1000ms buffer) of H_GREEN remains.
+      const desiredRemaining = ttMs + 1000;
+      const dur = target.currentPhaseDuration();
+      const wantPhaseTime = dur - desiredRemaining;
+      if (wantPhaseTime < target.phaseTime) target.phaseTime = Math.max(0, wantPhaseTime);
+    } else if (target.phase === "H_YELLOW") {
+      // About to go red. If car can still make it before yellow ends, fine.
+      // Otherwise we accept the next cycle.
+    }
+    // V_YELLOW: already transitioning to H_GREEN, nothing to do.
+
+    this.greenWaveActive = "→ Int " + target.id;
+    this.greenWaveInfo = "ETA " + (ttMs / 1000).toFixed(1) + "s";
+  }
+
+  // Detect any accidental car overlap (defensive — also useful as a "real" detector).
+  detectAccident() {
+    for (let i = 0; i < this.cars.length; i++) {
+      for (let j = i + 1; j < this.cars.length; j++) {
+        const a = this.cars[i], b = this.cars[j];
+        if (a.isAmbulance || b.isAmbulance) continue;
+        // crude overlap: only worth flagging if both inside an intersection
+        for (const intr of this.intersections) {
+          if (intr.accidentMode) continue;
+          if (a.x > intr.left - 5 && a.x < intr.right + 5 && a.y > intr.top - 5 && a.y < intr.bottom + 5 &&
+              b.x > intr.left - 5 && b.x < intr.right + 5 && b.y > intr.top - 5 && b.y < intr.bottom + 5) {
+            const dx = a.x - b.x, dy = a.y - b.y;
+            if (Math.abs(dx) < 14 && Math.abs(dy) < 14) {
+              intr.triggerAccident();
+            }
+          }
+        }
+      }
+    }
+  }
+
+  update(dt) {
+    if (!this.running) return;
+
+    this.lastSpawnV1 += dt;
+    this.lastSpawnV2 += dt;
+    this.lastSpawnH  += dt;
+    this.lastPed     += dt;
+
+    // Heavy vertical traffic on both vertical roads
+    if (this.lastSpawnV1 > 600 + Math.random() * 350) {
+      this.lastSpawnV1 = 0;
+      this.spawnCar(Math.random() < 0.5 ? "N" : "S", false, CX1);
+    }
+    if (this.lastSpawnV2 > 600 + Math.random() * 350) {
+      this.lastSpawnV2 = 0;
+      this.spawnCar(Math.random() < 0.5 ? "N" : "S", false, CX2);
+    }
+    // Sparse horizontal traffic so the green wave is easy to see
+    const horizCars = this.cars.filter(c => c.dir === "E" || c.dir === "W").length;
+    if (horizCars < 2 && this.lastSpawnH > 3500 + Math.random() * 2500) {
+      this.lastSpawnH = 0;
+      this.spawnCar(Math.random() < 0.5 ? "E" : "W", false);
+    }
+    // Pedestrians
+    if (this.lastPed > 8000 + Math.random() * 7000) {
+      this.lastPed = 0;
+      this.addPedestrian(Math.random() < 0.8 ? "normal" : "slow");
+    }
+
+    // Ambulance auto-yielding & green-wave override
+    this.ambulanceLogic();
+    this.greenWave();
+    this.detectAccident();
+
+    // Update intersections (lights/phase)
+    for (const intr of this.intersections) intr.update(dt);
+
+    // Update cars: each car obeys its NEXT intersection ahead
+    const buckets = { N:[], S:[], E:[], W:[] };
+    for (const c of this.cars) buckets[c.dir].push(c);
+    buckets.N.sort((a,b) => a.y - b.y);
+    buckets.S.sort((a,b) => b.y - a.y);
+    buckets.E.sort((a,b) => b.x - a.x);
+    buckets.W.sort((a,b) => a.x - b.x);
+
+    for (const dir of ["N","S","E","W"]) {
+      const list = buckets[dir];
+      // Group N/S by vertical road so cars don't think the other road's car is "ahead"
+      const groups = {};
+      for (const c of list) {
+        const key = (dir === "N" || dir === "S") ? c.vroad : "_";
+        (groups[key] = groups[key] || []).push(c);
+      }
+      for (const k in groups) {
+        const g = groups[k];
+        for (let i = 0; i < g.length; i++) {
+          const car = g[i];
+          const ahead = g[i-1] || null;
+          const intr = this.nextIntersectionFor(car);
+          let green = false;
+          if (intr) {
+            green = intr.isGreen(dir);
+            // Ambulance free pass through any intersection in emergency for its axis
+            if (car.isAmbulance && intr.emergencyMode && intr.emergencyPhase === "GREEN" &&
+                (dir === intr.emergencyDir || intr.opp(dir) === intr.emergencyDir)) green = true;
+          } else {
+            green = true; // no intersection ahead — free
+          }
+          car.update(ahead, intr, green);
+        }
+      }
+    }
+    this.cars = this.cars.filter(c => !c.isOffscreen());
+
+    // Update pedestrians per intersection
+    for (const intr of this.intersections) {
+      const phase = intr.accidentMode ? "ALL_RED"
+        : (intr.emergencyMode ? "EMERGENCY" : intr.phase);
+      // For pedestrians during accident / emergency on cross axis: treat as safe to keep crossing
+      // by falling through to canWalk(phase) which returns false unless phase matches our list.
+      // To keep peds visually moving, we treat ALL_RED as safe for everyone.
+      for (const p of intr.pedestrians) {
+        if (phase === "ALL_RED") {
+          p.x += p.vx * p.speed;
+          p.y += p.vy * p.speed;
+        } else {
+          p.update(phase);
+        }
+      }
+      intr.pedestrians = intr.pedestrians.filter(p => !p.done());
+    }
+  }
+
+  draw() {
+    // Background
+    ctx.fillStyle = "#1f3a25";
+    ctx.fillRect(0, 0, W, H);
+
+    // Sidewalks (broader than roads)
+    ctx.fillStyle = "#3b3f48";
+    ctx.fillRect(0, CY - ROAD_W/2 - 6, W, ROAD_W + 12);
+    for (const intr of this.intersections) {
+      ctx.fillRect(intr.cx - ROAD_W/2 - 6, 0, ROAD_W + 12, H);
+    }
+
+    // Road surfaces
+    ctx.fillStyle = "#2c2f36";
+    ctx.fillRect(0, CY - ROAD_W/2, W, ROAD_W);
+    for (const intr of this.intersections) {
+      ctx.fillRect(intr.cx - ROAD_W/2, 0, ROAD_W, H);
+    }
+
+    // Dashed lane lines (horizontal road) — split around intersections
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([14, 14]);
+    const ints = this.intersections.slice().sort((a,b) => a.cx - b.cx);
+    let xStart = 0;
+    for (const intr of ints) {
+      ctx.beginPath();
+      ctx.moveTo(xStart, CY); ctx.lineTo(intr.left, CY);
+      ctx.stroke();
+      xStart = intr.right;
+    }
+    ctx.beginPath();
+    ctx.moveTo(xStart, CY); ctx.lineTo(W, CY);
+    ctx.stroke();
+
+    // Dashed lane lines (vertical roads) — split around their intersection
+    for (const intr of this.intersections) {
+      ctx.beginPath();
+      ctx.moveTo(intr.cx, 0); ctx.lineTo(intr.cx, intr.top);
+      ctx.moveTo(intr.cx, intr.bottom); ctx.lineTo(intr.cx, H);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Per-intersection visuals
+    for (const intr of this.intersections) intr.drawRoadsAndCrosswalks(ctx);
+
+    // Cars and peds
+    for (const c of this.cars) c.draw(ctx);
+    for (const intr of this.intersections) intr.drawPedestrians(ctx);
+    for (const intr of this.intersections) intr.drawLights(ctx);
+    for (const intr of this.intersections) intr.drawLabel(ctx);
+
+    // HUD overlay
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px Segoe UI";
+    ctx.textAlign = "left";
+    let y = 22;
+    for (const intr of this.intersections) {
+      let label = intr.phase.replace("_", " ");
+      if (intr.accidentMode)   label = "ACCIDENT — ALL RED";
+      else if (intr.emergencyMode) label = "EMERGENCY (" + intr.emergencyDir + ")";
+      ctx.fillText("Int " + intr.id + ": " + label, 12, y);
+      y += 18;
+    }
+    if (this.greenWaveActive !== "idle") {
+      ctx.fillStyle = "#33e66e";
+      const extra = this.greenWaveInfo ? " (" + this.greenWaveInfo + ")" : "";
+      ctx.fillText("GREEN WAVE " + this.greenWaveActive + extra, 12, y);
+      y += 18;
+    }
+
+    if (!this.running) {
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 28px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.fillText("PAUSED — click Resume", W/2, H/2);
+    }
+  }
+}
+
+// -------------------- Bootstrap --------------------
+const sim = new Simulation();
+console.log("[traffic-sim] sim created");
+
+// Pre-seed traffic
+sim.spawnCar("N", false, CX1);
+sim.spawnCar("S", false, CX1);
+sim.spawnCar("N", false, CX2);
+sim.spawnCar("S", false, CX2);
+
+let lastTime = performance.now();
+let frameCount = 0;
+function loop(now) {
+  const dt = Math.min(now - lastTime, 100);
+  lastTime = now;
+  try { sim.update(dt); sim.draw(); }
+  catch (err) { console.error("[traffic-sim] loop error", err); }
+  frameCount++;
+  if (frameCount % 180 === 0) {
+    console.log("[traffic-sim] frame", frameCount, "cars", sim.cars.length,
+      "ped1", sim.intersections[0].pedestrians.length, "ped2", sim.intersections[1].pedestrians.length,
+      "p1", sim.intersections[0].phase, "p2", sim.intersections[1].phase);
+  }
+
+  // Status panel
+  document.getElementById("sP1").textContent = sim.intersections[0].accidentMode ? "Accident"
+    : (sim.intersections[0].emergencyMode ? "Emergency" : sim.intersections[0].phase);
+  document.getElementById("sP2").textContent = sim.intersections[1].accidentMode ? "Accident"
+    : (sim.intersections[1].emergencyMode ? "Emergency" : sim.intersections[1].phase);
+  let mode = "Normal";
+  if (sim.intersections.some(i => i.accidentMode))  mode = "Accident";
+  else if (sim.intersections.some(i => i.emergencyMode)) mode = "Emergency";
+  else if (sim.intersections.some(i => i.hasWheelchairOn(["N","S","E","W"]))) mode = "Wheelchair priority";
+  document.getElementById("sMode").textContent = mode;
+  document.getElementById("sTotal").textContent = sim.cars.length;
+  const peds = sim.intersections.reduce((n, i) => n + i.pedestrians.length, 0);
+  document.getElementById("sPed").textContent = peds;
+  document.getElementById("sWave").textContent = sim.greenWaveActive;
+
+  requestAnimationFrame(loop);
+}
+console.log("[traffic-sim] loop start");
+requestAnimationFrame(loop);
+
+// -------------------- UI --------------------
+document.getElementById("btnStart").addEventListener("click", () => {
+  sim.running = !sim.running;
+  document.getElementById("btnStart").textContent = sim.running ? "Pause Simulation" : "Resume Simulation";
+});
+document.getElementById("btnEmergency").addEventListener("click", () => {
+  if (!sim.running) sim.running = true;
+  sim.triggerEmergency();
+});
+document.getElementById("btnAccident").addEventListener("click", () => {
+  if (!sim.running) sim.running = true;
+  sim.triggerAccident();
+});
+document.getElementById("btnPedestrian").addEventListener("click", () => {
+  if (!sim.running) sim.running = true;
+  sim.addPedestrian("normal");
+});
+document.getElementById("btnWheelchair").addEventListener("click", () => {
+  if (!sim.running) sim.running = true;
+  sim.addPedestrian("wheelchair");
+});
+</script>
+</body>
+</html>

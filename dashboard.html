@@ -330,9 +330,9 @@
         /* Bottom Controls */
         .bottom-row {
             display: grid;
-            grid-template-columns: 200px 1fr 220px;
+            grid-template-columns: 200px 220px 1fr;
             gap: 12px;
-            height: 100px;
+            height: 420px;
         }
 
         .emergency-section {
@@ -492,6 +492,23 @@
         svg {
             width: 100%;
             height: 100%;
+        }
+
+        .simulation-embed {
+            flex: 1;
+            width: 100%;
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 10px;
+            overflow: hidden;
+            background: #0e1116;
+        }
+
+        #simulationFrame {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            background: #0e1116;
         }
 
         .intersection-dot {
@@ -660,16 +677,10 @@
 
                 <!-- Map Section -->
                 <div class="map-section">
-                    <div class="map-title">🗺️ Bakı Trafik Xəritəsi</div>
-                    <svg id="mapSvg" viewBox="0 0 200 200">
-                        <line class="road-line" x1="100" y1="30" x2="100" y2="170"/>
-                        <line class="road-line" x1="30" y1="100" x2="170" y2="100"/>
-                        <circle class="intersection-dot" id="dot-0" cx="60" cy="60"/>
-                        <circle class="intersection-dot" id="dot-1" cx="140" cy="60"/>
-                        <circle class="intersection-dot" id="dot-2" cx="60" cy="140"/>
-                        <circle class="intersection-dot" id="dot-3" cx="140" cy="140"/>
-                        <g id="cars-container"></g>
-                    </svg>
+                    <div class="map-title">🗺️ Kəsişmə Simulyasiyası</div>
+                    <div class="simulation-embed">
+                        <iframe id="simulationFrame" src="simulation.html" title="Traffic simulation"></iframe>
+                    </div>
                 </div>
             </div>
         </div>
@@ -995,9 +1006,9 @@
             state.intersections.forEach((intersection, idx) => {
                 const dot = document.getElementById(`dot-${idx}`);
                 const hasGreen = Object.values(intersection.directions).some(d => d.green);
-                if (hasGreen) {
+                if (dot && hasGreen) {
                     dot.classList.add('active');
-                } else {
+                } else if (dot) {
                     dot.classList.remove('active');
                 }
             });

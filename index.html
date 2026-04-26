@@ -10,7 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #f1f5f9; overflow: hidden; }
+        html, body { min-height: 100%; font-family: 'Inter', sans-serif; background: #f1f5f9; overflow-y: auto; }
 
         /* ─── NAVBAR ─── */
         .navbar {
@@ -33,17 +33,18 @@
 
         /* ─── MAIN GRID ─── */
         .main {
-            height: calc(100vh - 48px);
+            min-height: calc(100vh - 48px);
+            height: auto;
             display: grid;
             grid-template-columns: 280px 1fr;
-            overflow: hidden;
+            overflow: visible;
         }
 
         /* ─── SIDEBAR ─── */
         .sidebar {
             background: white;
             border-right: 1px solid #e2e8f0;
-            overflow-y: auto;
+            overflow: visible;
             padding: 12px;
         }
 
@@ -187,7 +188,7 @@
 
         /* ─── RIGHT PANEL ─── */
         .panel {
-            overflow-y: auto;
+            overflow: visible;
             padding: 16px;
             display: flex;
             flex-direction: column;
@@ -278,12 +279,21 @@
         .sim-info { font-size: 11px; color: #94a3b8; }
 
         #sim-canvas {
-            display: block;
+            display: none;
+        }
+
+        .sim-card {
+            flex: 1;
+            min-height: 280px;
+            overflow: visible;
+        }
+
+        .sim-frame {
             width: 100%;
-            height: 320px;
-            background: #f8fafc;
-            border-radius: 6px;
+            height: 920px;
             border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #f8fafc;
         }
 
         /* ─── SCROLLBAR ─── */
@@ -360,12 +370,13 @@
             </div>
 
             <!-- SIMULATION -->
-            <div class="card" style="flex: 1; min-height: 280px;">
+            <div class="card sim-card">
                 <div class="sim-header">
                     <div class="card-title" style="margin: 0;">Kəsişmə Simulyasiyası</div>
                     <div class="sim-info" id="sim-info">Neftçilər · 28 May</div>
                 </div>
                 <canvas id="sim-canvas"></canvas>
+                <iframe class="sim-frame" src="simulation.html" title="Smart Traffic Simulation"></iframe>
             </div>
         </div>
     </div>
@@ -516,6 +527,7 @@
             // Accumulate for reduction %
             Object.values(ix.queues).forEach(q => {
                 state.aiTotal += q * 0.016;
+                state.fixedTotal += q * 0.016 * 1.28;
             });
         }
 
@@ -794,7 +806,7 @@
             if (!canvas) return;
             const rect = canvas.getBoundingClientRect();
             canvas.width = Math.max(rect.width, 700) || 700;
-            canvas.height = 320;
+            canvas.height = 700;
         }
 
         // ─── MAIN LOOP ────────────────────────────────────────
